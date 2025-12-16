@@ -1,0 +1,11 @@
+streamlit
+pandas
+numpy
+plotly
+joblib
+tensorflow
+streamlit
+scikit-learn
+sequential
+lstm
+plotly.express
