@@ -1,227 +1,217 @@
-# Pastikan import streamlit di paling atas
+# ===============================
+# app.py (FINAL & FIXED)
+# ===============================
 import streamlit as st
-# 🔥 IMPORT MODEL TEMAN - UPDATE BACKPROP DI SINI
-from models.svm_model import train as svm_train  # Teman 1
-from models.bp_model import train as bp_train   # 🔥 TEMAN BACKPROP - BARIS INI BARU
-from models.lstm_model import train as lstm_train  # Teman 3
-import plotly.express as px
-import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
 
-# Utils functions (inline biar lengkap)
-def preview_data(df):
-    st.subheader("👀 Preview Data")
-    st.dataframe(df.head(), use_container_width=True)
-    st.metric("Total Data", len(df))
-    st.metric("Features", df.shape[1]-2)  # Exclude tanggal & RR
+from models.svr_model import train as svr_train
+from models.bp_model import train as bp_train
+from models.lstm_model import train as lstm_train
 
-def create_plots(errors, predictions, actual, model_name):
-    col1, col2 = st.columns(2)
-    
-    # Grafik Error/Loss
-    with col1:
-        fig_loss = px.line(x=range(len(errors)), y=errors, 
-                          title=f"{model_name} - Error Curve",
-                          labels={'x':'Epoch', 'y':'RMSE'})
-        st.plotly_chart(fig_loss, use_container_width=True)
-    
-    # Grafik Prediksi vs Aktual
-    with col2:
-        # Handle case ketika predictions lebih pendek dari actual (misal LSTM dengan sequences)
-        plot_len = min(100, len(predictions), len(actual))
-        
-        fig_pred = px.scatter(x=actual[:plot_len], y=predictions[:plot_len],
-                            title=f"{model_name} - Prediksi vs Aktual",
-                            labels={'x':'Aktual', 'y':'Prediksi'})
-        fig_pred.add_shape(type="line", x0=actual[:plot_len].min(), y0=actual[:plot_len].min(),
-                          x1=actual[:plot_len].max(), y1=actual[:plot_len].max(), line=dict(color="red"))
-        st.plotly_chart(fig_pred, use_container_width=True)
+# ===============================
+# PAGE CONFIG
+# ===============================
+st.set_page_config(
+    page_title="Rainfall Rate Predictor",
+    page_icon="🌧️",
+    layout="wide"
+)
 
-st.set_page_config(page_title="Rainfall Rate Predictor", layout="wide", page_icon="🌧️")
 st.title("🌧️ Rainfall Rate Predictor")
 st.markdown("---")
 
-# ========================================================
-# SIDEBAR NAVIGASI
-# ========================================================
+# ===============================
+# SIDEBAR
+# ===============================
 st.sidebar.header("⚙️ Kontrol Panel")
-mode = st.sidebar.selectbox("Pilih Mode", ["Training", "Validasi", "Testing"])
-model_choice = st.sidebar.selectbox("Pilih Model", ["SVM/SVR", "Backpropagation", "LSTM"])
-lr = st.sidebar.number_input("Learning Rate", 0.001, 0.1, 0.01, 0.001)
-steps_epochs = st.sidebar.number_input("Epochs", 50, 1000, 100)
 
+mode = st.sidebar.selectbox(
+    "Pilih Mode",
+    ["Training", "Validasi", "Testing"]
+)
 
+model_choice = st.sidebar.selectbox(
+    "Pilih Model",
+    ["SVR", "Backpropagation", "LSTM"]
+)
 
-# 🔥 FITUR GABUNGAN - BUTTON PERBANDINGAN
-if st.sidebar.button("📊 Bandingkan Semua Model", use_container_width=True):
-    st.session_state.compare_mode = True
-else:
-    st.session_state.compare_mode = False
+lr = st.sidebar.number_input(
+    "Learning Rate (NN only)",
+    min_value=0.001,
+    max_value=0.1,
+    value=0.01,
+    step=0.001
+)
 
-# ========================================================
-# UPLOAD & PREVIEW DATA
-# ========================================================
+epochs = st.sidebar.number_input(
+    "Epochs (NN only)",
+    min_value=10,
+    max_value=1000,
+    value=100
+)
 
+compare_mode = st.sidebar.button(
+    "📊 Bandingkan Semua Model",
+    use_container_width=True
+)
 
+st.sidebar.markdown("---")
 
-uploaded_file = st.file_uploader("📁 Upload CSV", type="csv")
-if uploaded_file:
-    df = pd.read_csv(uploaded_file, sep=';', decimal=',')  # CSV BMKG menggunakan semicolon & comma decimal
-    st.session_state.df = df
-    
-    col1, col2 = st.columns([2, 1])
-    with col1: preview_data(df)
-    with col2: 
-        st.info("**Target:** Rata-rata Curah Hujan (RR)")
-        st.info("**Features:** Tx, Tn, RH_avg, ss")
+# ===============================
+# UPLOAD FILE (INI WAJIB BENAR)
+# ===============================
+uploaded_file = st.file_uploader(
+    "📁 Upload CSV BMKG",
+    type="csv"
+)
 
-    # Prepare features & target
-    feature_cols = ['TX', 'TN', 'RH_AVG', 'SS']  # Sesuai dengan kolom CSV BMKG
-    target_col = "RR" 
-    X = df[feature_cols].fillna(0)
-    y = df['RR'].fillna(0)
-    
-    # ========================================================
-    # 🔥 MODE PERBANDINGAN 3 MODEL - UPDATE BACKPROP DI SINI
-    # ========================================================
-    if st.session_state.get('compare_mode', False):
-        st.header("📈 Perbandingan 3 Model ML")
-        
-        models_data = {}
-        with st.spinner("🔄 Menjalankan SVM + Backpropagation + LSTM..."):
-            # 🔥 BACKPROP UPDATED - BARIS INI BARU
-            svm_pred, svm_err, _ = svm_train(X, y, lr, steps_epochs, mode)
-            bp_pred, bp_err, _ = bp_train(X, y, lr, steps_epochs, mode)   # 🔥 UPDATE
-            lstm_pred, lstm_err, _ = lstm_train(X, y, lr, steps_epochs, mode)
-            
-            models_data = {
-                'SVM/SVR': {'pred': svm_pred, 'error': svm_err[-1]},
-                'Backpropagation': {'pred': bp_pred, 'error': bp_err[-1]},  # 🔥 UPDATE
-                'LSTM': {'pred': lstm_pred, 'error': lstm_err[-1]}
-            }
-        
-        # Grafik 1: Bar Chart Akurasi
-        col1, col2 = st.columns(2)
-        with col1:
-            accuracies = {k: max(0, (1-v['error'])*100) for k,v in models_data.items()}
-            fig_bar = px.bar(x=list(accuracies.keys()), y=list(accuracies.values()),
-                           title="🏆 Akurasi Perbandingan Model (%)",
-                           color=list(accuracies.values()),
-                           color_continuous_scale='Viridis')
-            st.plotly_chart(fig_bar, use_container_width=True)
-        
-        # Grafik 2: Prediksi vs Aktual
-        with col2:
-            fig_line = go.Figure()
-            for model_name, data in models_data.items():
-                fig_line.add_trace(go.Scatter(x=y[:100], y=data['pred'][:100],
-                                            mode='lines+markers', name=model_name,
-                                            line=dict(width=2)))
-            fig_line.add_trace(go.Scatter(x=y[:100], y=y[:100], mode='lines',
-                                        name='Aktual', line=dict(dash='dash', color='black')))
-            fig_line.update_layout(title="📊 Prediksi vs Aktual (100 sampel)")
-            st.plotly_chart(fig_line, use_container_width=True)
-        
-        # Tabel Perbandingan
-        st.subheader("📋 Detail Performa Model")
-        comparison_df = pd.DataFrame({
-            'Model': list(models_data.keys()),
-            'Error Akhir (RMSE)': [f"{v['error']:.4f}" for v in models_data.values()],
-            'Akurasi (%)': [f"{accuracies[k]:.2f}" for k in accuracies.keys()]
-        })
-        st.dataframe(comparison_df.style.highlight_min(subset=['Error Akhir (RMSE)'])
-                     .highlight_max(subset=['Akurasi (%)']), use_container_width=True)
-        
-        # Download gabungan
-        # Pastikan semua data punya panjang sama
-        min_len = min(len(y), 
-                     len(models_data['SVM/SVR']['pred']),
-                     len(models_data['Backpropagation']['pred']),
-                     len(models_data['LSTM']['pred']))
-        
-        all_results = pd.DataFrame({
-            'Aktual': y.values[:min_len],
-            'SVM_Pred': models_data['SVM/SVR']['pred'][:min_len],
-            'BP_Pred': models_data['Backpropagation']['pred'][:min_len],
-            'LSTM_Pred': models_data['LSTM']['pred'][:min_len]
-        })
-        st.download_button("💾 Download Semua Hasil", 
-                          all_results.to_csv(index=False),
-                          "perbandingan_3_model.csv", use_container_width=True)
-    
-    # ========================================================
-    # MODE SINGLE MODEL - UPDATE BACKPROP DI SINI
-    # ========================================================
-    else:
-        if st.button(f"🚀 Mulai {mode} - {model_choice}", type="primary", use_container_width=True):
-            with st.spinner(f"Training {model_choice}..."):
-                # 🔥 BACKPROP UPDATED - BARIS INI BARU
-                if model_choice == "SVM/SVR":
-                    results, errors, model_info = svm_train(X, y, lr, steps_epochs, mode)
-                elif model_choice == "Backpropagation":
-                    results, errors, model_info = bp_train(X, y, lr, steps_epochs, mode)  # 🔥 UPDATE
-                else:  # LSTM
-                    results, errors, model_info = lstm_train(X, y, lr, steps_epochs, mode)
-                
-                # Simpan untuk testing berulang
-                st.session_state.model_info = model_info
-                st.session_state.results = results
-                st.session_state.errors = errors
-            
-            # Tampilkan hasil
-            st.success("✅ Selesai!")
-            
-            # Pastikan hasil & target punya panjang sama sebelum metrics/plot
-            results_arr = np.array(results).flatten()
-            y_arr = np.array(y).flatten()
-            min_len_plot = min(len(results_arr), len(y_arr))
-            if min_len_plot == 0:
-                st.error("❌ Tidak ada data untuk ditampilkan.")
-                raise st.stop()
-            results_arr = results_arr[:min_len_plot]
-            y_arr = y_arr[:min_len_plot]
-
-            # Hitung metrics lengkap
-            error_awal = errors[0] if len(errors) > 0 else 0
-            error_akhir = errors[-1] if len(errors) > 0 else 0
-            error_rata_rata = np.mean(errors) if len(errors) > 0 else 0
-
-            # Tampilkan metrics dalam 4 kolom (kembalikan akurasi berbasis RMSE seperti semula)
-            akurasi = max(0, (1 - error_akhir) * 100)
-            # st.metric("RMSE Akhir", f"{error_akhir:.4f}")
-
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("📊 Error Awal", f"{error_awal:.4f}")
-            with col2:
-                st.metric("📊 Error Akhir", f"{error_akhir:.4f}")
-            with col3:
-                st.metric("📊 Error Rata-rata", f"{error_rata_rata:.4f}")
-            with col4:
-                st.metric("🎯 Akurasi", f"{akurasi:.1f}%")
-
-            # Grafik hasil (gunakan arrays yang sudah disesuaikan panjangnya)
-            create_plots(errors, results_arr, y_arr, model_choice)
-            
-            # Download single model
-            # Pastikan hasil dan target punya panjang sama
-            if len(results) != len(y):
-                st.warning(f"⚠️ Mismatch data: hasil ({len(results)}) vs target ({len(y)}). Menggunakan data yang lebih pendek.")
-                min_len = min(len(results), len(y))
-                results = results[:min_len]
-                y = y[:min_len]
-            
-            csv_results = pd.DataFrame({'Prediksi': results, 'Aktual': y})
-            st.download_button("💾 Download Hasil CSV", 
-                             csv_results.to_csv(index=False),
-                             f"hasil_{model_choice}_{mode.lower()}.csv",
-                             use_container_width=True)
-
-else:
+if uploaded_file is None:
     st.info("👆 Silakan upload file CSV terlebih dahulu")
-    st.markdown("**Format kolom yang dibutuhkan:** Tx, Tn, RH_avg, ss, RR")
+    st.stop()
 
-# def train():
-#     # Fungsi dummy, nanti diganti dengan kode asli
-#     pass
+# ===============================
+# LOAD DATA (FIX NAME ERROR)
+# ===============================
+df = pd.read_csv(uploaded_file, sep=";", decimal=",")
+
+# ===============================
+# PREVIEW DATA
+# ===============================
+st.subheader("👀 Preview Data")
+st.dataframe(df.head(), use_container_width=True)
+
+c1, c2 = st.columns(2)
+c1.metric("Total Data", len(df))
+c2.metric("Jumlah Feature", 5)
+
+st.markdown("### 🎯 Informasi Data")
+st.info("**Target:** RR (Rainfall Rate / Curah Hujan)")
+st.info("**Features:** TN, TX, TAVG, RH_AVG, SS")
+
+# ===============================
+# PREPARE DATA
+# ===============================
+feature_cols = ["TN", "TX", "TAVG", "RH_AVG", "SS"]
+X = df[feature_cols].apply(pd.to_numeric, errors="coerce").fillna(0)
+y = pd.to_numeric(df["RR"], errors="coerce").fillna(0)
+
+st.markdown("---")
+
+# ===============================
+# MODE PERBANDINGAN
+# ===============================
+if compare_mode:
+    st.header("📈 Perbandingan 3 Model")
+
+    with st.spinner("Menjalankan semua model..."):
+        svr_pred, _, svr_info = svr_train(X, y, mode)
+        bp_pred, bp_err, _ = bp_train(X, y, lr, epochs, mode)
+        lstm_pred, lstm_err, _ = lstm_train(X, y, lr, epochs, mode)
+
+    rmse = {
+        "SVR": svr_info["metrics"]["RMSE"],
+        "Backpropagation": bp_err[-1],
+        "LSTM": lstm_err[-1]
+    }
+
+    fig_bar = px.bar(
+        x=list(rmse.keys()),
+        y=list(rmse.values()),
+        title="Perbandingan RMSE"
+    )
+    st.plotly_chart(fig_bar, use_container_width=True)
+
+    min_len = min(len(y), len(svr_pred), len(bp_pred), len(lstm_pred))
+    out_df = pd.DataFrame({
+        "Aktual": y[:min_len],
+        "SVR": svr_pred[:min_len],
+        "Backpropagation": bp_pred[:min_len],
+        "LSTM": lstm_pred[:min_len]
+    })
+
+    st.download_button(
+        "💾 Download Perbandingan CSV",
+        out_df.to_csv(index=False),
+        "perbandingan_model.csv",
+        use_container_width=True
+    )
+
+# ===============================
+# MODE SINGLE MODEL
+# ===============================
+else:
+    if st.button(
+        f"🚀 Jalankan {model_choice}",
+        type="primary",
+        use_container_width=True
+    ):
+        with st.spinner(f"Menjalankan {model_choice}..."):
+
+            if model_choice == "SVR":
+                preds, _, model_info = svr_train(X, y, mode)
+
+            elif model_choice == "Backpropagation":
+                preds, errors, _ = bp_train(X, y, lr, epochs, mode)
+
+            else:
+                preds, errors, _ = lstm_train(X, y, lr, epochs, mode)
+
+        st.success("✅ Proses selesai")
+
+        preds = np.array(preds)
+        y_plot = y.values[:len(preds)]
+
+        # ===== METRICS =====
+        if model_choice == "SVR":
+            m = model_info["metrics"]
+            h = model_info["hyperparameter"]
+
+            st.subheader("🔧 Hyperparameter SVR")
+            st.json(h)
+
+            c1, c2, c3 = st.columns(3)
+            c1.metric("RMSE", f"{m['RMSE']:.4f}")
+            c2.metric("MAE", f"{m['MAE']:.4f}")
+            c3.metric("R²", f"{m['R2']:.4f}")
+
+            st.info(
+                "ℹ️ R² negatif berarti SVR lebih buruk dari prediksi rata-rata. "
+                "Ini normal pada data curah hujan."
+            )
+
+        else:
+            error_awal = errors[0]
+            error_akhir = errors[-1]
+            error_rata = np.mean(errors)
+            akurasi = max(0, (1 - error_akhir) * 100)
+
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Error Awal (RMSE)", f"{error_awal:.4f}")
+            c2.metric("Error Akhir (RMSE)", f"{error_akhir:.4f}")
+            c3.metric("Error Rata-rata", f"{error_rata:.4f}")
+            c4.metric("Akurasi (%)", f"{akurasi:.1f}%")
+
+        # ===== PLOT =====
+        fig = px.scatter(
+            x=y_plot,
+            y=preds,
+            labels={"x": "Aktual", "y": "Prediksi"},
+            title=f"{model_choice} – Prediksi vs Aktual"
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        # ===== DOWNLOAD =====
+        out_df = pd.DataFrame({
+            "Aktual": y_plot,
+            "Prediksi": preds
+        })
+
+        st.download_button(
+            "💾 Download Hasil CSV",
+            out_df.to_csv(index=False),
+            f"hasil_{model_choice.lower()}.csv",
+            use_container_width=True
+        )
