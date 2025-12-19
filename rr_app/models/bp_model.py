@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error
 from tensorflow.keras.models import Sequential
@@ -7,88 +6,93 @@ from tensorflow.keras.layers import Dense
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping
 
+
 def train(X, y, lr, epochs, mode="Training"):
     """
     Backpropagation (MLP)
-    Urutan dan output DISESUAIKAN dengan LSTM
+    FIXED: Tidak training ulang saat Validasi / Testing
     """
 
-    # 1. Mapping kolom (SAMA)
-    feature_map = {'Tx': 'TX', 'Tn': 'TN', 'RH_avg': 'RH_AVG', 'ss': 'SS'}
-    X_renamed = X.rename(columns=feature_map)
-
-    # 2. Normalisasi data (SAMA)
+    # ===============================
+    # NORMALISASI
+    # ===============================
     scaler_X = MinMaxScaler()
     scaler_y = MinMaxScaler()
-    X_scaled = scaler_X.fit_transform(X_renamed)
+
+    X_scaled = scaler_X.fit_transform(X)
     y_scaled = scaler_y.fit_transform(y.values.reshape(-1, 1))
 
-    # 3. Bangun model BACKPROPAGATION (MLP)
+    # ===============================
+    # BUILD MODEL
+    # ===============================
     model = Sequential()
     model.add(Dense(32, activation='relu', input_shape=(X_scaled.shape[1],)))
     model.add(Dense(16, activation='relu'))
-    model.add(Dense(1))  # Output RR
+    model.add(Dense(1))
 
     model.compile(
         optimizer=Adam(learning_rate=lr),
         loss='mse'
     )
 
-    # 4. Training (SAMA)
-    early_stop = EarlyStopping(
-        monitor='loss',
-        patience=10,
-        restore_best_weights=True
-    )
+    # ===============================
+    # TRAINING (HANYA SEKALI)
+    # ===============================
+    history = None
+    rmse_history = []
 
-    history = model.fit(
-        X_scaled,
-        y_scaled,
-        epochs=epochs,
-        batch_size=32,
-        verbose=0,
-        callbacks=[early_stop]
-    )
-
-    # 5. Simpan info model (SAMA FORMAT)
-    model_info = {
-        'model': model,
-        'scaler_X': scaler_X,
-        'scaler_y': scaler_y,
-        'history': history.history
-    }
-
-    # 6. Hitung RMSE per epoch
-    loss_history = np.array(history.history.get('loss', []))
-    rmse_history = np.sqrt(loss_history).tolist()
-
-    # ================= MODE HANDLING =================
     if mode == "Training":
-        predictions_scaled = model.predict(X_scaled, verbose=0)
-        predictions = scaler_y.inverse_transform(predictions_scaled).flatten().tolist()
-        errors = rmse_history
+        early_stop = EarlyStopping(
+            monitor='loss',
+            patience=10,
+            restore_best_weights=True
+        )
 
-    elif mode == "Validasi":
-        predictions_scaled = model.predict(X_scaled, verbose=0)
-        predictions = scaler_y.inverse_transform(predictions_scaled).flatten().tolist()
-        errors = rmse_history[-10:]
+        history = model.fit(
+            X_scaled,
+            y_scaled,
+            epochs=epochs,
+            batch_size=32,
+            verbose=0,
+            callbacks=[early_stop]
+        )
 
-    else:  # Testing
-        test_start = int(len(X_scaled) * 0.8)
-        X_test = X_scaled[test_start:]
-        y_test = y_scaled[test_start:]
+        loss_history = np.array(history.history['loss'])
+        rmse_history = np.sqrt(loss_history).tolist()
 
-        predictions_scaled = model.predict(X_test, verbose=0)
-        predictions = scaler_y.inverse_transform(predictions_scaled).flatten().tolist()
+    # ===============================
+    # PREDIKSI
+    # ===============================
+    if mode == "Testing":
+        split = int(len(X_scaled) * 0.8)
+        X_use = X_scaled[split:]
+        y_use = y_scaled[split:]
+    else:
+        X_use = X_scaled
+        y_use = y_scaled
 
-        errors = []
-        for i in range(len(predictions_scaled)):
+    preds_scaled = model.predict(X_use, verbose=0)
+    preds = scaler_y.inverse_transform(preds_scaled).flatten()
+
+    # ===============================
+    # ERROR HANDLING
+    # ===============================
+    if mode != "Training":
+        # Hitung RMSE kumulatif (simulasi error curve)
+        rmse_history = []
+        for i in range(len(preds_scaled)):
             rmse = np.sqrt(
                 mean_squared_error(
-                    y_test[:i+1],
-                    predictions_scaled[:i+1]
+                    y_use[:i+1],
+                    preds_scaled[:i+1]
                 )
             )
-            errors.append(float(rmse))
+            rmse_history.append(float(rmse))
 
-    return predictions, errors, model_info
+    model_info = {
+        "model": model,
+        "scaler_X": scaler_X,
+        "scaler_y": scaler_y
+    }
+
+    return preds.tolist(), rmse_history, model_info
