@@ -1,5 +1,5 @@
 # =========================================
-# app.py – FINAL STABLE + COMPARE MODE
+# app.py
 # =========================================
 import streamlit as st
 import pandas as pd
@@ -49,14 +49,24 @@ else:
 
 compare_mode = st.sidebar.button("📊 Bandingkan Semua Model")
 
-# =========================================
-# UPLOAD CSV
-# =========================================
+# ===============================
+# UPLOAD DATA
+# ===============================
 uploaded_file = st.file_uploader("📁 Upload CSV BMKG", type="csv")
-if uploaded_file is None:
-    st.info("Silakan upload file CSV terlebih dahulu")
-    st.stop()
 
+if not uploaded_file:
+    st.info("👆 Silakan upload file CSV terlebih dahulu")
+    st.markdown("""
+    **Keterangan:**
+    - TN (Temperatur Minimum)
+    - TX (Temperatur Maksimum)
+    - TAVG (Temperatur Rata-rata)
+    - RH_AVG (Kelembapan Rata-rata)
+    - SS (Lama Penyinaran Matahari)
+    - RR (Curah Hujan)
+    """)
+    st.stop()
+    
 df = pd.read_csv(uploaded_file, sep=";", decimal=",")
 
 # =========================================
