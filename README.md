@@ -10,14 +10,14 @@ Aplikasi ini memudahkan pengguna untuk melakukan eksperimen dan evaluasi model b
 Membangun aplikasi dengan antarmuka interaktif berbasis web untuk membandingkan performa metode SVR, Backpropagation, dan LSTM dalam memprediksi curah hujan berdasarkan data training, validation, dan testing. 
 ## Cara Menggunakan Aplikasi
 1. Buka aplikasi melalui tautan berikut:
-🔗 https://rainfallrate-datascienceproject.streamlit.app/
+🔗 https://rainfallrate-datascienceproject.streamlit.app/<br>
 2. Pilih mode data:
 - Training
 - Validation
-- Testing
+- Testing<br>
 3. Pilih model prediksi:
 - SVR
 - Backpropagation
-- LSTM
-4. Unggah dataset sesuai dengan mode yang telah dipilih (tersedia pada folder datasets).
+- LSTM<br>
+4. Unggah dataset sesuai dengan mode yang telah dipilih (tersedia pada folder datasets).<br>
 5. Jalankan proses prediksi dan amati hasil evaluasi model.
